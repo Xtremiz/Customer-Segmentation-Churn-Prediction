@@ -3,20 +3,20 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
-from sklearn.metrics import accuracy_score, precision_score
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.naive_bayes import MultinomialNB, BernoulliNB, GaussianNB
-
-mnb = MultinomialNB()
-bnb = BernoulliNB()
-gnb = GaussianNB()
+from sklearn.metrics import accuracy_score, precision_score,silhouette_score
+from sklearn.utils import class_weight
+from sklearn.ensemble import RandomForestClassifier
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+from sklearn.cluster import KMeans,DBSCAN,AgglomerativeClustering
+from sklearn.mixture import GaussianMixture
 
 le = LabelEncoder()
 df = pd.read_csv('s.csv')
 df.drop_duplicates(subset=['customerID'], inplace=True)
 df.drop('customerID', axis=1, inplace=True)  # 💡 Important drop
 
-scalar = MinMaxScaler()
 model = LogisticRegression()
 
 for_churn = df[['SeniorCitizen', 'Partner', 'Dependents',
@@ -42,44 +42,35 @@ for_churn['PhoneService'] = le.fit_transform(for_churn['PhoneService'])
 for_churn['PaperlessBilling'] = le.fit_transform(for_churn['PaperlessBilling'])
 for_churn['Churn'] = le.fit_transform(for_churn['Churn'])
 
-# Convert TotalCharges to numeric
 for_churn['TotalCharges'] = pd.to_numeric(for_churn['TotalCharges'], errors='coerce')
 for_churn.dropna(inplace=True)
 
-# Define X and y
 X = for_churn.drop('Churn', axis=1)
-y = for_churn['Churn']  # ✅ FIXED: y ko scalar se transform mat karo
+y = for_churn['Churn']  
 
-# Scale features
-Scaled_X = scalar.fit_transform(X)
+model = RandomForestClassifier(class_weight="balanced",random_state=42)
 
-# Split data
-X_train, X_test, y_train, y_test = train_test_split(Scaled_X, y, test_size=0.2, random_state=42)
+X_train,X_test,y_train,y_test = train_test_split(X,y,random_state=42,test_size=0.2)
+model.fit(X_train,y_train)
+y_pred = model.predict(X_test)
+accuracy = accuracy_score(y_test, y_pred)
+precision = precision_score(y_test, y_pred, average='macro')  # or use pos_label='Yes' if labels are binary
 
-# Logistic Regression
-model.fit(X_train, y_train)
-prediction = model.predict(X_test)
-print("Logistic Regression")
-print(f"Accuracy : {accuracy_score(y_test, prediction)}")
-print(f"Precision : {precision_score(y_test, prediction)}")
+print("Final Evaluation Results:")
+print(f"Accuracy  : {accuracy:.4f}")
+print(f"Precision : {precision:.4f}")
 
-# MNB
-mnb.fit(X_train, y_train)
-mnbprediction = mnb.predict(X_test)  # ✅ FIXED
-print("MNB")
-print(f"Accuracy : {accuracy_score(y_test, mnbprediction)}")
-print(f"Precision : {precision_score(y_test, mnbprediction)}")
+#now applying the unsupervised learning
+scalar = StandardScaler()
+X_scaled = scalar.fit_transform(X)
+pca = PCA(n_components=2)
+X_pca = pca.fit_transform(X_scaled)
+X_pca = pd.DataFrame(X_pca, columns=['PCA1', 'PCA2'])
+X_pca['Churn'] = for_churn['Churn'].values
 
-# BNB
-bnb.fit(X_train, y_train)
-bnbprediction = bnb.predict(X_test)  # ✅ FIXED
-print("BNB")
-print(f"Accuracy : {accuracy_score(y_test, bnbprediction)}")
-print(f"Precision : {precision_score(y_test, bnbprediction)}")
 
-# GNB
-gnb.fit(X_train, y_train)
-gnbprediction = gnb.predict(X_test)  # ✅ FIXED
-print("GNB")
-print(f"Accuracy : {accuracy_score(y_test, gnbprediction)}")
-print(f"Precision : {precision_score(y_test, gnbprediction)}")
+kmeans = KMeans(n_clusters=2,random_state=42)
+kmeansprediction = kmeans.fit_predict(X_pca)
+X_pca['Cluster'] = kmeansprediction
+kmeanssscore = silhouette_score(X_pca[['PCA1', 'PCA2']],kmeansprediction)
+print(f"Kmeans score is {kmeanssscore:.4f}")
